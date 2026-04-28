@@ -306,5 +306,60 @@
     "dataAbertura": "21/04/2026, 08:35:00",
     "dataInicio": "21/04/2026, 08:35:35",
     "dataConclusao": "21/04/2026, 08:36:53"
+  },
+  {
+    "id": 29,
+    "telefone": "8057895547051@lid",
+    "nome": "Lucas Barba Santos",
+    "categoria": "Programas | ERP",
+    "descricao": "AOKI perdeu conexão, não consegue estabilizar.\nSaí e tentei logar novamente, porém só fica carregando e não dá nenhum outro sinal.\nJá verifiquei a conexão do notebook e está tudo em ordem.",
+    "status": "Concluído",
+    "dataAbertura": "22/04/2026, 16:52:06",
+    "dataInicio": "22/04/2026, 16:56:10",
+    "dataConclusao": "22/04/2026, 16:56:17"
+  },
+  {
+    "id": 30,
+    "telefone": "8057895547051@lid",
+    "nome": "Lucas Barba Santos",
+    "categoria": "Impressora | Scanner",
+    "descricao": "Impressora demora mais de 15 minutos para imprimir um documento que foi solicitado.",
+    "status": "Concluído",
+    "dataAbertura": "24/04/2026, 10:22:03",
+    "dataInicio": "24/04/2026, 11:52:38",
+    "dataConclusao": "27/04/2026, 07:34:09"
+  },
+  {
+    "id": 31,
+    "telefone": "8057895547051@lid",
+    "nome": "Lucas Barba Santos",
+    "categoria": "Acesso | Contas",
+    "descricao": "Necessito do acesso ao drive no notebook, por favor",
+    "status": "Concluído",
+    "dataAbertura": "27/04/2026, 14:36:31",
+    "dataInicio": "27/04/2026, 15:22:37",
+    "dataConclusao": "27/04/2026, 15:26:43"
+  },
+  {
+    "id": 32,
+    "telefone": "55933761798339@lid",
+    "nome": "Diego Redekop Guidem",
+    "categoria": "Internet",
+    "descricao": "meu pc nao liga",
+    "status": "Concluído",
+    "dataAbertura": "28/04/2026, 12:40:24",
+    "dataInicio": "",
+    "dataConclusao": "28/04/2026, 12:43:05"
+  },
+  {
+    "id": 33,
+    "telefone": "55933761798339@lid",
+    "nome": "Diego Redekop Guidem",
+    "categoria": "Outros",
+    "descricao": "minha internet nao funciona",
+    "status": "Concluído",
+    "dataAbertura": "28/04/2026, 14:24:41",
+    "dataInicio": "",
+    "dataConclusao": "28/04/2026, 14:24:56"
   }
 ]

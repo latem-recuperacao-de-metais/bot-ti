@@ -3,19 +3,12 @@ const qrcode = require('qrcode-terminal');
 const xlsx = require('xlsx');
 const fs = require('fs');
 const path = require('path');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// --- CONFIGURAÇÕES ---
 const EXCEL_FILE = path.join(__dirname, 'banco_de_dados.xlsx');
 const TICKETS_FILE = path.join(__dirname, 'chamados.json');
-const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos em milissegundos
-const NUMERO_ADMIN_TI = '5515997829881@c.us';  // Número que recebe notificação de novos chamados
+const TIMEOUT_MS = 5 * 60 * 1000; 
+const NUMERO_ADMIN_TI = '5515997829881@c.us'; 
 
-// --- CONFIGURAÇÃO DA IA DO GOOGLE GEMINI ---
-const GEMINI_API_KEY = 'AIzaSyBkj1netlMdbd78T1UkIrLlA-z2CGxW-SU'; 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-
-// --- INICIALIZAÇÃO DOS ARQUIVOS ---
 function initFiles() {
     let wb;
     if (!fs.existsSync(EXCEL_FILE)) {
@@ -29,7 +22,6 @@ function initFiles() {
         xlsx.utils.sheet_add_aoa(wsChamados, [['ID', 'Data Abertura', 'Data Início', 'Data Conclusão', 'Telefone', 'Nome', 'Categoria', 'Problema', 'Status']], { origin: 'A1' });
         
         xlsx.writeFile(wb, EXCEL_FILE);
-        console.log('Arquivo Excel criado com sucesso.');
     } else {
         wb = xlsx.readFile(EXCEL_FILE);
         if (!wb.Sheets['Chamados']) {
@@ -39,14 +31,10 @@ function initFiles() {
             xlsx.writeFile(wb, EXCEL_FILE);
         }
     }
-
-    if (!fs.existsSync(TICKETS_FILE)) {
-        fs.writeFileSync(TICKETS_FILE, JSON.stringify([]));
-    }
+    if (!fs.existsSync(TICKETS_FILE)) fs.writeFileSync(TICKETS_FILE, JSON.stringify([]));
 }
 initFiles();
 
-// --- FUNÇÕES DE BANCO DE DADOS ---
 function getUsuarioExcel(telefone) {
     const wb = xlsx.readFile(EXCEL_FILE);
     const ws = wb.Sheets['Clientes'];
@@ -59,14 +47,12 @@ function salvarUsuarioExcel(telefone, nome) {
     const ws = wb.Sheets['Clientes'];
     const data = xlsx.utils.sheet_to_json(ws);
     data.push({ Telefone: telefone.replace('@c.us', ''), Nome: nome });
-    const newWs = xlsx.utils.json_to_sheet(data);
-    wb.Sheets['Clientes'] = newWs;
+    wb.Sheets['Clientes'] = xlsx.utils.json_to_sheet(data);
     xlsx.writeFile(wb, EXCEL_FILE);
 }
 
 function getChamados() {
-    const data = fs.readFileSync(TICKETS_FILE);
-    return JSON.parse(data);
+    return JSON.parse(fs.readFileSync(TICKETS_FILE));
 }
 
 function criarChamado(telefone, nome, categoria, descricao) {
@@ -75,23 +61,15 @@ function criarChamado(telefone, nome, categoria, descricao) {
     const dataAtual = new Date().toLocaleString('pt-BR');
     
     const novoChamado = {
-        id: novoId,
-        telefone: telefone,
-        nome: nome,
-        categoria: categoria,
-        descricao: descricao,
-        status: 'Aberto',
-        dataAbertura: dataAtual,
-        dataInicio: '',
-        dataConclusao: ''
+        id: novoId, telefone, nome, categoria, descricao,
+        status: 'Aberto', dataAbertura: dataAtual, dataInicio: '', dataConclusao: ''
     };
     
     chamados.push(novoChamado);
     fs.writeFileSync(TICKETS_FILE, JSON.stringify(chamados, null, 2));
 
     const wb = xlsx.readFile(EXCEL_FILE);
-    const ws = wb.Sheets['Chamados'];
-    const dataExcel = xlsx.utils.sheet_to_json(ws);
+    const dataExcel = xlsx.utils.sheet_to_json(wb.Sheets['Chamados']);
     dataExcel.push({
         ID: novoId, 'Data Abertura': dataAtual, 'Data Início': '', 'Data Conclusão': '',
         Telefone: telefone.replace('@c.us', ''), Nome: nome, Categoria: categoria, Problema: descricao, Status: 'Aberto'
@@ -133,7 +111,6 @@ function atualizarStatusChamado(id, novoStatus, client) {
     return true;
 }
 
-// --- GESTÃO DE SESSÃO E FUNÇÕES AUXILIARES ---
 const userSessions = {};
 function clearSession(telefone) {
     if (userSessions[telefone]?.timeout) clearTimeout(userSessions[telefone].timeout);
@@ -148,43 +125,16 @@ function resetTimeout(telefone, client) {
     }, TIMEOUT_MS);
 }
 
-// Função para gerar a mensagem padronizada de chamados (Usada no !status e na Opção 2)
 function gerarMensagemMeusChamados(telefone) {
     const meus = getChamados().filter(c => c.telefone === telefone && c.status !== 'Concluído');
-    let r = "";
-    if (meus.length === 0) {
-        r = "Você não tem chamados ativos no momento.";
-    } else {
-        r = "*--- SEUS CHAMADOS ATIVOS ---*\n\n";
+    let r = meus.length === 0 ? "Você não tem chamados ativos no momento." : "*--- SEUS CHAMADOS ATIVOS ---*\n\n";
+    if (meus.length > 0) {
         meus.reverse().forEach(c => {
             r += `*ID:* #${c.id} [${c.status}]\n*Categoria:* ${c.categoria || 'Não informada'}\n*Problema:* ${c.descricao}\n\n`;
         });
     }
     r += "\n*0* - Voltar ao menu principal";
     return r;
-}
-
-// --- IA GEMINI ---
-async function analisarIA(descricao, media) {
-    try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        const prompt = `Atue como a Inteligência Artificial de Suporte de TI da Latem Recuperação de Metais. 
-O usuário relatou o seguinte problema: "${descricao}".
-Sua tarefa:
-1. Inicie a resposta dizendo "Olá! Sou a Inteligência Artificial de Suporte de TI da Latem. 🤖"
-2. Analise o problema e dê 2-3 passos curtos para tentar resolver.
-3. Termine a resposta EXATAMENTE com o texto abaixo (incluindo os emojis):
-⚠️ *MUITO IMPORTANTE:* Se você tiver qualquer dificuldade com esses passos ou se o problema não for resolvido, não se preocupe! Por favor, escolha a opção de abrir chamado na próxima etapa para que nossa equipe técnica assuma o caso.`;
-        let result;
-        if (media) {
-            result = await model.generateContent([prompt, { inlineData: { data: media.data, mimeType: media.mimetype } }]);
-        } else {
-            result = await model.generateContent(prompt);
-        }
-        return result.response.text();
-    } catch (e) {
-        return "Olá! Sou a Inteligência Artificial de Suporte de TI da Latem. 🤖\n\n🛠️ *Dica:* Tente reiniciar o equipamento e verificar cabos.\n\n⚠️ *MUITO IMPORTANTE:* Se você tiver qualquer dificuldade com esses passos ou se o problema não for resolvido, não se preocupe! Por favor, escolha a opção de abrir chamado na próxima etapa para que nossa equipe técnica assuma o caso.";
-    }
 }
 
 // --- CLIENTE WHATSAPP ---
@@ -195,7 +145,7 @@ const client = new Client({
 });
 
 client.on('qr', (qr) => qrcode.generate(qr, { small: true }));
-client.on('ready', () => console.log('Bot Latem TI Pronto!'));
+client.on('ready', () => console.log('Bot Latem TI Pronto! (Modo Direto - Sem IA)'));
 
 client.on('message', async (msg) => {
     if (msg.fromMe || msg.isStatus || msg.from.includes('@g.us')) return;
@@ -206,22 +156,13 @@ client.on('message', async (msg) => {
 
     if (!texto && !msg.hasMedia) return;
 
-    // --- COMANDOS ---
     if (comando.startsWith('!')) {
-        
-        // !status (Cliente) - Agora usa a mesma mensagem padrão da opção 2
         if (comando === '!status' || comando === '!meuschamados') {
-            const mensagemPadrao = gerarMensagemMeusChamados(telefone);
-            
-            // Garante que o usuário entre na etapa correta para poder digitar "0" e voltar ao menu
             if (!userSessions[telefone]) userSessions[telefone] = { step: 'START', dados: {} };
             userSessions[telefone].step = 'WAIT_RETURN';
             resetTimeout(telefone, client);
-
-            return client.sendMessage(telefone, mensagemPadrao);
+            return client.sendMessage(telefone, gerarMensagemMeusChamados(telefone));
         }
-
-        // !chamados (Liberado para TI ver a fila de trabalho)
         if (comando === '!chamados') {
             const todos = getChamados().filter(c => c.status !== 'Concluído');
             if (todos.length === 0) return client.sendMessage(telefone, "Sem chamados pendentes.");
@@ -229,26 +170,19 @@ client.on('message', async (msg) => {
             todos.forEach(c => r += `*#${c.id}* - ${c.nome}\nAssunto: ${c.descricao}\n\n`);
             return client.sendMessage(telefone, r);
         }
-
-        // !iniciar <ID>
         if (comando.startsWith('!iniciar')) {
             const id = parseInt(comando.split(' ')[1]);
-            if (isNaN(id)) return client.sendMessage(telefone, "O ID precisa ser um número.");
             const ok = atualizarStatusChamado(id, 'Em Andamento', client);
-            return client.sendMessage(telefone, ok ? `Chamado #${id} iniciado.` : "ID não encontrado.");
+            return client.sendMessage(telefone, ok ? `Chamado #${id} iniciado.` : "ID inválido.");
         }
-
-        // !concluir <ID>
         if (comando.startsWith('!concluir') || comando.startsWith('!finalizar')) {
             const id = parseInt(comando.split(' ')[1]);
-            if (isNaN(id)) return client.sendMessage(telefone, "O ID precisa ser um número.");
             const ok = atualizarStatusChamado(id, 'Concluído', client);
-            return client.sendMessage(telefone, ok ? `Chamado #${id} concluído.` : "ID não encontrado.");
+            return client.sendMessage(telefone, ok ? `Chamado #${id} concluído.` : "ID inválido.");
         }
         return;
     }
 
-    // --- FLUXO DE ATENDIMENTO ---
     if (!userSessions[telefone]) userSessions[telefone] = { step: 'START', dados: {} };
     resetTimeout(telefone, client);
     const session = userSessions[telefone];
@@ -261,13 +195,12 @@ client.on('message', async (msg) => {
                 await client.sendMessage(telefone, `Olá ${userDB.Nome}, bem-vindo(a) à Tecnologia da Informação da *Latem*! 👋\n\nComo podemos ajudar?\n\n*1* - Abrir Chamado de TI\n*2* - Consultar meus chamados\n*3* - Encerrar atendimento`);
                 session.step = 'MENU';
             } else {
-                await client.sendMessage(telefone, "Olá! Bem-vindo(a) ao suporte de TI da *Latem Recuperação de Metais*. 👋\n\nPara começarmos, qual seu nome completo?");
+                await client.sendMessage(telefone, "Olá! Bem-vindo(a) ao suporte de TI da *Latem*. 👋\n\nQual seu nome completo?");
                 session.step = 'NAME';
             }
             break;
 
         case 'NAME':
-            if (!texto) return client.sendMessage(telefone, "Por favor, digite seu nome.");
             session.dados.nome = texto;
             salvarUsuarioExcel(telefone, texto);
             await client.sendMessage(telefone, `Prazer, ${texto}! O que deseja fazer?\n\n*1* - Abrir Chamado de TI\n*2* - Consultar meus chamados\n*3* - Encerrar atendimento`);
@@ -276,14 +209,13 @@ client.on('message', async (msg) => {
 
         case 'MENU':
             if (texto === '1') {
-                await client.sendMessage(telefone, "Descreva detalhadamente o problema que está ocorrendo:");
+                await client.sendMessage(telefone, "Descreva detalhadamente o problema:");
                 session.step = 'PROB';
             } else if (texto === '2') {
-                const mensagemPadrao = gerarMensagemMeusChamados(telefone);
-                await client.sendMessage(telefone, mensagemPadrao);
+                await client.sendMessage(telefone, gerarMensagemMeusChamados(telefone));
                 session.step = 'WAIT_RETURN';
             } else if (texto === '3') {
-                await client.sendMessage(telefone, "Atendimento encerrado. A TI da Latem agradece o seu contato! 👋");
+                await client.sendMessage(telefone, "Atendimento encerrado. 👋");
                 clearSession(telefone);
             } else {
                 await client.sendMessage(telefone, "Opção inválida. Digite 1, 2 ou 3.");
@@ -294,48 +226,37 @@ client.on('message', async (msg) => {
             if (texto === '0') {
                 await client.sendMessage(telefone, "Como podemos ajudar?\n\n*1* - Abrir Chamado de TI\n*2* - Consultar meus chamados\n*3* - Encerrar atendimento");
                 session.step = 'MENU';
-            } else {
-                await client.sendMessage(telefone, "Por favor, digite *0* para voltar ao menu principal.");
             }
             break;
 
         case 'PROB':
-            if (texto.length < 5) return client.sendMessage(telefone, "Por favor, descreva com um pouco mais de detalhes.");
             session.dados.descricao = texto;
-            await client.sendMessage(telefone, "Se você tiver uma *foto* do erro (ou do equipamento), envie agora.\n\nSe não tiver, basta digitar *pular*.");
+            await client.sendMessage(telefone, "Se tiver uma *foto* do erro, envie agora.\nCaso contrário, basta digitar *pular*.");
             session.step = 'PHOTO';
             break;
 
         case 'PHOTO':
             if (msg.hasMedia) {
                 session.dados.media = await msg.downloadMedia();
-                await client.sendMessage(telefone, "📸 Foto recebida!");
             }
-            await client.sendMessage(telefone, "Analisando seu caso com nossa Inteligência Artificial... ⏳");
-            const analise = await analisarIA(session.dados.descricao, session.dados.media);
-            await client.sendMessage(telefone, analise);
-            await client.sendMessage(telefone, "Conseguiu resolver o problema?\n\n*1* - Sim, resolveu!\n*2* - Não, abrir chamado.");
-            session.step = 'RESOLVED';
-            break;
-
-        case 'RESOLVED':
-            if (texto === '1') {
-                await client.sendMessage(telefone, "Que excelente notícia! Atendimento encerrado. ✅");
-                clearSession(telefone);
-            } else if (texto === '2') {
-                await client.sendMessage(telefone, "Para direcionarmos seu chamado, escolha a categoria:\n\n*1* - Programas | ERP\n*2* - Computador | Notebook\n*3* - Celular | Tablet\n*4* - Internet\n*5* - Perifericos | Equipamentos\n*6* - Impressora | Scanner\n*7* - Acesso | Contas\n*8* - Outros");
-                session.step = 'CAT';
-            } else {
-                await client.sendMessage(telefone, "Opção inválida. Digite *1* se resolveu ou *2* para abrir o chamado.");
-            }
+            
+            await client.sendMessage(telefone, "Para direcionarmos seu atendimento, escolha a categoria:\n\n*1* - Programas | ERP\n*2* - Computador | Notebook\n*3* - Celular | Tablet\n*4* - Internet\n*5* - Perifericos | Equipamentos\n*6* - Impressora | Scanner\n*7* - Acesso | Contas\n*8* - Outros");
+            session.step = 'CAT';
             break;
 
         case 'CAT':
             const cats = {'1':'Programas | ERP','2':'Computador | Notebook','3':'Celular | Tablet','4':'Internet','5':'Perifericos | Equipamentos','6':'Impressora | Scanner','7':'Acesso | Contas','8':'Outros'};
             if (cats[texto]) {
                 const id = criarChamado(telefone, session.dados.nome, cats[texto], session.dados.descricao);
-                await client.sendMessage(telefone, `✅ *Chamado #${id} aberto com sucesso!*\n\nAguarde o contato de um de nossos técnicos.\nLembre-se: Você pode consultar o andamento no menu inicial ou digitando *!status* | *!meuschamados* a qualquer momento.`);
+                
+                await client.sendMessage(telefone, `✅ *Chamado #${id} aberto com sucesso!*\n\nAguarde o contato da nossa equipe.\nLembre-se: Você pode consultar o andamento no menu inicial ou digitando *!status* | *!meuschamados* a qualquer momento.`);
+                
                 await client.sendMessage(NUMERO_ADMIN_TI, `🚨 *NOVO CHAMADO (#${id})*\nUsuário: ${session.dados.nome}\nCategoria: ${cats[texto]}\nProblema: ${session.dados.descricao}`);
+                
+                if (session.dados.media) {
+                     await client.sendMessage(NUMERO_ADMIN_TI, session.dados.media, { caption: `📷 Evidência anexada ao chamado #${id}` });
+                }
+
                 clearSession(telefone);
             } else {
                 await client.sendMessage(telefone, "Opção inválida. Digite um número de 1 a 8.");
